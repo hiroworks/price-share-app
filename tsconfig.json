@@ -13,5 +13,5 @@
     "**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
-  ]
+, "app/_layout.tst", "app/index.tst", "app/price-scan..tst", "App.js", "app/price-scan..tst", "app/index.tst", "app/HomeScreen.tst", "app/price-scan..tst", "app/index.tst", "app/page.tst", "app/price-scan/page.tst"  ]
 }

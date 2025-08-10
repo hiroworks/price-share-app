@@ -16,7 +16,13 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "networkSecurityConfig": "./network_security_config.xml",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.CAMERA"
+      ],
+      "package": "com.hiroworks.priceshareapp"
     },
     "web": {
       "bundler": "metro",
@@ -33,7 +39,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
-      ]
+      ],
+      "expo-barcode-scanner"
     ],
     "experiments": {
       "typedRoutes": true

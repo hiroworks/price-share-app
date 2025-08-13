@@ -82,41 +82,50 @@ export default function PriceScan() {
     経度: string;
   } | null>(null);
 
+  const takePhoto = async () => {
+    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert('カメラへのアクセスが許可されていません');
+      return;
+    }
 
-const takePhoto = async () => {
-  console.log('カメラ撮影開始');
-  const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-  if (!permissionResult.granted) {
-    Alert.alert('カメラへのアクセスが許可されていません');
-    return;
-  }
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: false,
+      quality: 0.8,
+    });
 
-  const result = await ImagePicker.launchCameraAsync({
-    allowsEditing: false,
-    quality: 0.8,
-  });
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const asset = result.assets[0];
+      setImageUri(asset.uri);
+    }
 
-  if (!result.canceled && result.assets && result.assets.length > 0) {
-    const asset = result.assets[0];
+/*
+  const takePhoto = async () => {
+    const res = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      quality: 0.8,
+    });
+*/
 
-    // 即アップロード（保存・確認なし）
-    const manipResult = await ImageManipulator.manipulateAsync(
-      asset.uri,
-      [{ resize: { width: 500 } }], // 横幅500pxに縮小（縦横比維持）
-      { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG } // JPEGで圧縮
-    );
+    if (!result.canceled) {
+      const originalUri = result.assets[0].uri;
 
-    console.log('カメラ撮影成功');
-    // 一時的にURIはstateに入れる（アップロードに使用）
-//    setImageUri(manipResult.uri);
-    await sendToServer(manipResult.uri); // ← 撮影直後にアップロード実行
-  }
-};
+      // 画像のメタ情報取得（サイズなど）
+      const manipResult = await ImageManipulator.manipulateAsync(
+        originalUri,
+        [{ resize: { width: 500 } }], // 横幅500pxにリサイズ（縦横比維持）
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      setImageUri(manipResult.uri); // 縮小後の画像URIを使用
+    }
+  };
 
 
-  const sendToServer = async (uri: string) => {
-    if (!uri) return; // URIが無ければ何もしない
-    console.log('sendToServer');
+  const sendToServer = async () => {
+    if (!imageUri) return;
+
 /*
     const manipResult = await ImageManipulator.manipulateAsync(
       imageUri,
@@ -135,7 +144,7 @@ const takePhoto = async () => {
     const form = new FormData();
     // @ts-ignore
     form.append('file', {
-      uri: uri,
+      uri: imageUri,
       name: 'photo.jpg',
       type: 'image/jpeg',
     });
@@ -210,7 +219,7 @@ const takePhoto = async () => {
         return;
       }
 
-/*
+
       // OCR実行リクエスト
       try {
         console.log('OCRリクエスト送信中...');
@@ -268,7 +277,7 @@ const takePhoto = async () => {
         const recognition = ocrJson.recognition as OCRRecognition;
         if (recognition) {
 //        if (recognition && (recognition['本体価格'] || recognition['商品名'])) {
-          // === ここから追加：OCRの値をステップ2用に保持 ===
+          /* === ここから追加：OCRの値をステップ2用に保持 === */
           const ocrProductName = recognition['商品名'];
           const ocrPrice = recognition['本体価格'];
 //          const ocrProductName = recognition['商品名'] ?? '';
@@ -292,7 +301,7 @@ const takePhoto = async () => {
 
           // ステップ2へ進む
           setStep(2);
-          // === ここまで追加 === 
+          /* === ここまで追加 === */
 
           // OCR結果あり デバッグ用に全文表示（任意）
           setOcrResult(JSON.stringify(ocrJson, null, 2));
@@ -313,7 +322,8 @@ const takePhoto = async () => {
         console.error('通信エラー:', error.message);
         setOcrResult(`通信エラーが発生しました: ${error.message}`);
       }
-*/
+
+
 
       // 近隣店舗検索
       try {
@@ -367,45 +377,6 @@ const takePhoto = async () => {
       }
 
 
-      // 価格ランキング情報取得
-      try {
-        //  冗長ではあるがエラー回避のために定義
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          setShopResult('位置情報の使用が許可されていません');
-          return;
-        }
-        const location = await Location.getCurrentPositionAsync({});
-        const { latitude, longitude } = location.coords;
-
-        const rankingResp = await fetch('http://192.168.3.12:8000/api/price-ranking', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jan: finalJanCode,
-            product_name: finalProductName,
-            lat: latitude,
-            lon: longitude
-          })
-        });
-    console.log('ランキング情報', rankingResp ?? "");
-        if (!rankingResp.ok) {
-          const errorText = await rankingResp.text();
-          console.error('ランキングAPIエラー:', errorText);
-          alert('ランキング取得に失敗しました:\n' + errorText);
-          return;
-        }
-        const rankJson = await rankingResp.json();
-        console.log('ランキング情報00', rankJson ?? "");
-        setRanking(rankJson.ranking || []);
-        console.log('ランキング情報01', rankJson ?? "");
-//        setStep(5);
-      } catch (e: any) {
-        console.error('価格ランキング情報取得失敗:', e.message);
-        setShopResult('価格ランキング情報取得に失敗しました: ' + e.message);
-      }
-
-
 /*
       await fetch('http://192.168.3.12:8000/api/register-price', {
         method:'POST',
@@ -449,10 +420,26 @@ const takePhoto = async () => {
         <Text style={styles.headerTitle}>アプリ名</Text>
       </View>
 
+      {imageUri && (
+        <>
+          <Image
+            source={{ uri: imageUri }}
+            style={styles.previewImage}
+          />
+          <Text style={styles.confirmText}>この画像でよろしいですか？</Text>
+          <View style={styles.buttonRow}>
+            <TouchableOpacity style={styles.okButton} onPress={sendToServer}>
+              <Text style={styles.buttonText}>OK</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.ngButton} onPress={sendToServer}>
+              <Text style={styles.buttonText}>NG</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
 
       {/* ここ ↓↓↓ をまるごと差し替える */}
       <ScrollView contentContainerStyle={styles.scrollContent}>
-
 
 
         {/* ====== Step 1 : バーコード結果 ====== */}
@@ -497,39 +484,6 @@ const takePhoto = async () => {
                 }}
               />
             </View>
-
-            <View>
-              <Text style={styles.heading}>🏆 価格ランキング (30km)</Text>
-              {ranking.map((r, i) => (
-                console.log('ランキング情報', ranking ?? ""),
-                console.log('遷移パラメータ・keyword:', ranking[0]?.商品名 ?? ""),
-                console.log('遷移パラメータ・現在地lat:', latitude?.toString() ?? ""),
-                console.log('遷移パラメータ・現在地lon:', longitude?.toString() ?? ""),
-                console.log('遷移パラメータ', r ?? ""),
-                console.log('遷移パラメータ・店舗名：', r.店舗名 ?? ""),
-                console.log('遷移パラメータ・緯度：', r.緯度 ?? ""),
-                console.log('遷移パラメータ・経度：', r.経度 ?? ""),
-                <View key={i} style={{ marginVertical: 6 }}>
-                  <Text
-                    style={{ fontSize: 18, color: 'blue', textDecorationLine: 'underline' }}
-                    onPress={() => {
-                      router.push({
-                        pathname: "/nearby-shops",
-                        params: {
-                          店舗名: r.店舗名,
-                          店舗緯度: r.緯度.toString() ?? "",
-                          店舗経度: r.経度.toString() ?? "",
-                          現在地緯度: latitude?.toString() ?? "",
-                          現在地経度: longitude?.toString() ?? "",
-                        },
-                      });
-                    }}
-                    >{i + 1}位 ¥{r.価格} {r.店舗名}
-                  </Text>
-                </View>
-              ))}
-            </View>
-
           </View>
         )}
 

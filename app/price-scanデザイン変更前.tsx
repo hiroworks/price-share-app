@@ -6,7 +6,6 @@ import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Alert, Button, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { Dropdown } from 'react-native-element-dropdown';
 
 type Shop = {
   name?: string;
@@ -44,7 +43,6 @@ export default function PriceScan() {
   const [captureStage, setCaptureStage] = useState<'label' | 'product' | 'done'>('label');
   const [labelImageUri, setLabelImageUri] = useState<string | null>(null);
   const [productImageUri, setProductImageUri] = useState<string | null>(null);
-  const [priceMode, setPriceMode] = useState<'tax_excluded' | 'tax_included'>('tax_excluded');
 
 
   useEffect(() => {
@@ -59,7 +57,6 @@ export default function PriceScan() {
     商品画像: string;
     緯度: string;
     経度: string;
-    距離_km: string;
   };
 
   const [ranking, setRanking] = useState<RankingItem[]>([]);
@@ -84,16 +81,6 @@ export default function PriceScan() {
     緯度: string;
     経度: string;
   } | null>(null);
-
-
-const calcTaxIncludedPrice = (price: string | number, mode: 'tax_excluded' | 'tax_included'): number => {
-  const num = parseFloat(price as string) || 0;
-  if (mode === 'tax_excluded') {
-    return Math.round(num * 1.1); // 税抜き → 税込み
-  }
-  return num; // 税込み表示
-};
-
 
 
 const takePhoto = async () => {
@@ -499,88 +486,64 @@ const takePhoto = async () => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
 
 
+
         {/* ====== Step 1 : バーコード結果 ====== */}
         {step === 1 && janInfo && (
-          <View style={styles.stepCard}>
-            {/* 上部：商品画像＋右側に「商品名」「JANコード」風ピル */}
-            <View style={styles.row}>
-              {janInfo.imageUrl ? (
-                <Image source={{ uri: janInfo.imageUrl }} style={styles.productImage} />
-              ) : (
-                <View style={[styles.productImage, { alignItems:'center', justifyContent:'center' }]}>
-                  <Text style={{ color:'#999' }}>画像なし</Text>
-                </View>
-              )}
+          <View>
+            <Text>📍 現在のステップ: {step}</Text>
+            <Text style={styles.heading}>✅ バーコード結果 (Step1)</Text>
 
+            {janInfo.imageUrl ? (
+              <Image source={{ uri: janInfo.imageUrl }} style={{ width: 150, height: 150 }} />
+            ) : (
+              <Text>画像なし</Text>
+            )}
 
+            <Text>JANコード: {janInfo.jan || '(未取得)'}</Text>
 
-              <View style={{ flex: 1 }}>
+            {/* 編集可能な商品名 */}
+            <Text style={styles.inputLabel}>商品名（編集可）:</Text>
+            <TextInput
+              style={styles.input}
+              value={finalProductName}
+              onChangeText={setFinalProductName}
+              placeholder="商品名を入力"
+              keyboardType="default"
+            />
 
-                {/* JANコード表示（読み取り値をそのまま） */}
-                <View>
-                  <Text style={styles.pillText}>
-                    JANコード:{janInfo.jan || '(未取得)'}
-                  </Text>
-                </View>
-
-                {/* 商品名（編集可）— ピル風 */}
-                <View>
-                  <Text style={styles.pillText}>
-                    {finalProductName}
-                  </Text>
-                </View>
-
-                {/* 商品名（編集可）— ピル風 */}
-                <View>
-                  <Text style={styles.pillText}>
-                    レトルト商品
-                  </Text>
-                </View>
-
-              </View>
-
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 }}>
+              <Button
+                title="登録する"
+                onPress={() => {
+                  setStep(2); // ステップ2（OCR結果表示）へ進む
+                }}
+              />
+              <Button
+                title="登録しない"
+                onPress={() => {
+                  setFinalProductName('');
+                  setFinalJanCode('');
+                  setFinalImageUrl('');
+                  setFinalPrice('');
+                  setStep(2); // 次のステップへ
+                }}
+              />
             </View>
 
-            {/* 大きな角丸のプライマリボタン */}
-            <TouchableOpacity
-              style={styles.primaryButton}
-              onPress={() => { setStep(2); }}
-            >
-              <Text style={styles.primaryButtonText}>商品を登録する</Text>
-            </TouchableOpacity>
-
-            {/* スキップ（セカンダリリンク風。挙動は元の「登録しない」と同じ） */}
-            <TouchableOpacity
-              style={styles.linkButton}
-              onPress={() => {
-                setFinalProductName('');
-                setFinalJanCode('');
-                setFinalImageUrl('');
-                setFinalPrice('');
-                setStep(2);
-              }}
-            >
-              <Text style={styles.linkButtonText}>登録しない</Text>
-            </TouchableOpacity>
-
-            {/* みんなの価格セクション */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>価格ランキング</Text>
-
-              {/* 並べ替えボタン（見た目だけ。既存ロジックは変更しない） */}
-              <TouchableOpacity style={styles.outlineButton} activeOpacity={0.8}>
-                <Text style={styles.outlineButtonText}>
-                  近隣
-                </Text>
-              </TouchableOpacity>
-
-              {/* ランキングカードリスト（クリックで既存のrouter.pushを使用） */}
-              <View style={{ marginTop: 8 }}>
-                {ranking.map((r, i) => (
-                  <TouchableOpacity
-                    key={`${r.店舗名}-${i}`}
-                    style={styles.rankRow}
-                    activeOpacity={0.8}
+            <View>
+              <Text style={styles.heading}>🏆 価格ランキング (30km)</Text>
+              {ranking.map((r, i) => (
+                console.log('ランキング情報', ranking ?? ""),
+                console.log('遷移パラメータ・keyword:', ranking[0]?.商品名 ?? ""),
+                console.log('遷移パラメータ・現在地lat:', latitude?.toString() ?? ""),
+                console.log('遷移パラメータ・現在地lon:', longitude?.toString() ?? ""),
+                console.log('遷移パラメータ', r ?? ""),
+                console.log('遷移パラメータ・店舗名：', r.店舗名 ?? ""),
+                console.log('遷移パラメータ・緯度：', r.緯度 ?? ""),
+                console.log('遷移パラメータ・経度：', r.経度 ?? ""),
+                <View key={i} style={{ marginVertical: 6 }}>
+                  <Text
+                    style={{ fontSize: 18, color: 'blue', textDecorationLine: 'underline' }}
                     onPress={() => {
                       router.push({
                         pathname: "/nearby-shops",
@@ -593,62 +556,29 @@ const takePhoto = async () => {
                         },
                       });
                     }}
-                  >
-                    <Text style={styles.rankIndex}>{i + 1}</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.rankPrice}>¥ {r.価格}</Text>
-                      <Text style={styles.rankShop}>{r.店舗名} ({r.距離_km}km)</Text>
-                    </View>
-                    <Text style={styles.rankArrow}>›</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+                    >{i + 1}位 ¥{r.価格} {r.店舗名}
+                  </Text>
+                </View>
+              ))}
             </View>
+
           </View>
         )}
 
 
-
-        {/* ====== Step 2 : OCR結果 + 店舗選択 ====== */}
-        {step === 2 && janInfo && (
+        {/* ====== Step 2 : OCR結果 ====== */}
+        {step === 2 && (
           <View>
             <Text>📍 現在のステップ: {step}</Text>
             <Text style={styles.heading}>🔍 OCR結果 (Step2)</Text>
 
+            {/* 商品画像（ステップ1で取得済みなら表示） */}
+            {finalImageUrl ? (
+              <Image source={{ uri: finalImageUrl }} style={{ width: 150, height: 150 }} />
+            ) : null}
 
-            {/* 上部：商品画像＋右側に「商品名」「JANコード」風ピル */}
-            <View style={styles.row}>
-              {janInfo.imageUrl ? (
-                <Image source={{ uri: janInfo.imageUrl }} style={styles.productImage} />
-              ) : (
-                <View style={[styles.productImage, { alignItems:'center', justifyContent:'center' }]}>
-                  <Text style={{ color:'#999' }}>画像なし</Text>
-                </View>
-              )}
-
-              <View style={{ flex: 1 }}>
-
-                {/* JANコード表示（読み取り値をそのまま） */}
-                <View>
-                  <Text style={styles.pillText}>
-                    JANコード:{janInfo.jan || '(未取得)'}
-                  </Text>
-                </View>
-
-                {/* 商品名（編集可）— ピル風 */}
-                <View>
-                  <Text style={styles.pillText}>
-                    レトルト商品
-                  </Text>
-                </View>
-
-              </View>
-
-            </View>
-
-
-            {/* 商品名（編集可） */}
-            <Text style={styles.inputLabel}>商品名:</Text>
+            {/* 編集可能な商品名 */}
+            <Text style={styles.inputLabel}>商品名（編集可）:</Text>
             <TextInput
               style={styles.input}
               value={finalProductName}
@@ -657,83 +587,36 @@ const takePhoto = async () => {
               keyboardType="default"
             />
 
-            {/* 本体価格 + 切替ボタン */}
-            <Text style={styles.inputLabel}>本体価格:</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <TextInput
-                style={[styles.input, { flex: 1 }]}
-                value={finalPrice}
-                onChangeText={setFinalPrice}
-                placeholder="本体価格を入力"
-                keyboardType="numeric"
-              />
-              <View style={{ flexDirection: 'row', gap: 4 }}>
-                <TouchableOpacity
-                  style={[
-                    styles.switchBtn,
-                    priceMode === 'tax_excluded' && styles.switchBtnActive,
-                  ]}
-                  onPress={() => setPriceMode('tax_excluded')}
-                >
-                  <Text style={styles.switchBtnText}>税抜き</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.switchBtn,
-                    priceMode === 'tax_included' && styles.switchBtnActive,
-                  ]}
-                  onPress={() => setPriceMode('tax_included')}
-                >
-                  <Text style={styles.switchBtnText}>税込み</Text>
-                </TouchableOpacity>
-                {/* 税込み価格表示 */}
-                <Text style={{ marginTop: 6, fontSize: 16 }}>
-                  税込: {calcTaxIncludedPrice(finalPrice, priceMode)} 円
-                </Text>
-              </View>
-            </View>
-
-            {/* 近隣店舗プルダウン */}
-            <Text style={styles.inputLabel}>近隣店舗:</Text>
-            <Dropdown
-              style={{ borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 8 }}
-              data={shops.map((shop, index) => ({
-                label: `${shop.name}（${shop.distance_km?.toFixed(2)} km）`,
-                value: index
-              }))}
-              labelField="label"
-              valueField="value"
-              placeholder="近隣店舗を選択"
-              value={selectedShopIndex}
-              onChange={(item: { label: string; value: number }) => setSelectedShopIndex(item.value)}
+            {/* 編集可能な本体価格 */}
+            <Text style={styles.inputLabel}>本体価格（編集可）:</Text>
+            <TextInput
+              style={styles.input}
+              value={finalPrice}
+              onChangeText={setFinalPrice}
+              placeholder="本体価格を入力"
+              keyboardType="numeric"
             />
 
-
-            {/* 大きな角丸のプライマリボタン */}
-            <TouchableOpacity
-              style={styles.primaryButton}
-              onPress={() => { setStep(4); }}
-            >
-              <Text style={styles.primaryButtonText}>入力内容を確認する</Text>
-            </TouchableOpacity>
-
-            {/* スキップ（セカンダリリンク風。挙動は元の「登録しない」と同じ） */}
-            <TouchableOpacity
-              style={styles.linkButton}
-              onPress={() => {
-                setFinalProductName('');
-                setFinalJanCode('');
-                setFinalImageUrl('');
-                setFinalPrice('');
-                setStep(1);
-              }}
-            >
-              <Text style={styles.linkButtonText}>前のページに戻る</Text>
-            </TouchableOpacity>
-
+            {/* 登録／登録しない */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 }}>
+              <Button
+                title="登録する"
+                onPress={() => {
+                  // 入力内容はすでに finalXXX 系に保持されている
+                  setStep(3);
+                }}
+              />
+              <Button
+                title="登録しない"
+                onPress={() => {
+                  // 終了または初期化（任意）
+                  setStep(0);
+                  alert('登録を中止しました');
+                }}
+              />
+            </View>
           </View>
         )}
-
 
         {/* ====== Step 3 : 近隣店舗一覧 ====== */}
         {step === 3 && (
@@ -786,54 +669,25 @@ console.log('選択店舗緯度：', shops[0]?.coordinates ?? ""),
 console.log('選択店舗の緯度（lat）：', shops[0]?.coordinates?.[1] ?? ""),
 console.log('選択店舗の経度（lon）：', shops[0]?.coordinates?.[0] ?? ""),
 
-console.log('JANコード：', finalJanCode ?? ""),
-console.log('販売価格：', finalPrice ?? ""),
-console.log('商品名：', finalProductName ?? ""),
 
           <View>
             <Text style={styles.heading}>✅ 登録内容の確認 (Step4)</Text>
 
+            <Text style={styles.inputLabel}>🛒 商品名: {finalProductName}</Text>
+            <Text style={styles.inputLabel}>📦 JANコード: {finalJanCode || '(なし)'}</Text>
+            <Text style={styles.inputLabel}>💴 値札価格: {finalPrice || '(未取得)'}</Text>
 
-            {/* 上部：商品画像＋右側に「商品名」「JANコード」風ピル */}
-            {/* 画像＋右側の情報 */}
-            <View style={styles.row}>
-              {/* 左：画像 */}
-              {finalImageUrl ? (
-                <Image source={{ uri: finalImageUrl }} style={styles.productImage} />
-              ) : (
-                <View style={[styles.productImage, { alignItems: 'center', justifyContent: 'center' }]}>
-                  <Text style={{ color: '#999' }}>画像なし</Text>
-                </View>
-              )}
+            {finalImageUrl ? (
+              <Image source={{ uri: finalImageUrl }} style={{ width: 150, height: 150, marginVertical: 10 }} />
+            ) : null}
 
-              {/* 右：JANコード、価格、種類 */}
-              <View style={{ flex: 1 }}>
-                <Text style={styles.pillText}>
-                  JANコード: {finalJanCode || '(未取得)'}
-                </Text>
-                <Text style={styles.pillText}>
-                  販売価格: {finalPrice || '(未取得)'}
-                </Text>
-                <Text style={styles.pillText}>
-                  種類：レトルト商品
-                </Text>
-              </View>
-            </View>
-
-            {/* 下：商品名 */}
-            <Text style={{ marginTop: 10 }}>🛒 商品名: {finalProductName}</Text>
-
-            {/* 下：店舗名 */}
             {selectedShopIndex !== null && shops[selectedShopIndex] && (
-              <Text style={styles.inputLabel}>🏪 店舗名: {shops[selectedShopIndex].name}</Text>
+              <Text style={styles.inputLabel}>🏪 店舗: {shops[selectedShopIndex].name}</Text>
             )}
 
-
             <View style={{ marginTop: 20 }}>
-
-              {/* 大きな角丸のプライマリボタン */}
-              <TouchableOpacity
-                style={styles.primaryButton}
+              <Button
+                title="この内容で登録"
                 onPress={async () => {
                   try {
                     const registerResp = await fetch('http://192.168.3.12:8000/api/register-price', {
@@ -886,23 +740,7 @@ console.log('ランキング情報', rankingResp ?? "");
                     alert('登録に失敗しました: ' + e.message);
                   }
                 }}
-              >
-                <Text style={styles.primaryButtonText}>この内容で登録</Text>
-              </TouchableOpacity>
-
-              {/* スキップ（セカンダリリンク風。挙動は元の「登録しない」と同じ） */}
-              <TouchableOpacity
-                style={styles.linkButton}
-                onPress={() => {
-//                  setFinalProductName('');
-//                  setFinalJanCode('');
-//                  setFinalImageUrl('');
-//                  setFinalPrice('');
-                  setStep(2);
-                }}
-              >
-                <Text style={styles.linkButtonText}>前のページに戻る</Text>
-              </TouchableOpacity>
+              />
 
             </View>
           </View>
@@ -951,198 +789,7 @@ console.log('ランキング情報', rankingResp ?? "");
 
 }
 
-
 const styles = StyleSheet.create({
-  /* 既存の上書き -------------------- */
-  container: {
-    flex: 1,
-    backgroundColor: '#F7F2EE', // 淡いベージュ系
-  },
-  header: {
-    backgroundColor: 'transparent', // バーを無くし紙面風
-    height: 100,
-    width: '100%',
-    justifyContent: 'flex-end',
-    alignItems: 'flex-start',
-    paddingBottom: 12,
-    paddingHorizontal: 24,
-  },
-  headerTitle: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#D86B5F', // コーラル
-  },
-  scrollContent: {
-    padding: 16,
-    alignItems: 'stretch', // 中央寄せ → 画面幅いっぱい
-  },
-  heading: {
-    fontWeight: 'bold',
-    fontSize: 18,
-    marginVertical: 12,
-    color: '#D86B5F',
-  },
-  inputLabel: {
-    fontSize: 16,
-    marginTop: 10,
-    marginBottom: 6,
-    color: '#6B5E57',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#E6DDD7',
-    borderRadius: 14,
-    padding: 12,
-    marginTop: 6,
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-  },
-
-  /* 追加スタイル -------------------- */
-
-  // Stepの大枠カード
-  stepCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-    marginBottom: 16,
-  },
-
-  row: { flexDirection: 'row', gap: 12 },
-
-  productImage: {
-    width: 92,
-    height: 92,
-    borderRadius: 12,
-    backgroundColor: '#FAFAFA',
-    marginRight: 12,
-  },
-
-  // ピル型の入力（商品名）
-  pillInput: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E6DDD7',
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginBottom: 10,
-  },
-  pillText: {
-    fontSize: 14,
-    color: '#403A36',
-  },
-
-  // ピル型の表示（JANなど）
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E6DDD7',
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-  },
-  pillLabel: {
-    color: '#8A7D76',
-    marginRight: 6,
-    fontSize: 14,
-  },
-  pillValue: {
-    color: '#403A36',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-
-  // 大きい丸ボタン
-  primaryButton: {
-    backgroundColor: '#D86B5F',
-    borderRadius: 28,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 18,
-  },
-  primaryButtonText: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-
-  // セカンダリ（リンク風）
-  linkButton: { alignSelf: 'center', paddingVertical: 10 },
-  linkButtonText: { color: '#C05B4C', fontSize: 14 },
-
-  // セクション（みんなの価格）
-  section: {
-    marginTop: 8,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#D86B5F',
-    marginBottom: 8,
-  },
-
-  // 枠線だけのピルボタン
-  outlineButton: {
-    borderWidth: 1.5,
-    borderColor: '#D8BFB5',
-    backgroundColor: '#FFF',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 999,
-    alignItems: 'center',
-    marginTop: 6,
-    marginBottom: 10,
-  },
-  outlineButtonText: {
-    color: '#7D6F68',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-
-  // ランキング行（カード化）
-  rankRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#EFE6E0',
-  },
-  rankIndex: {
-    width: 28,
-    textAlign: 'center',
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#B36F5E',
-    marginRight: 10,
-  },
-  rankPrice: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#2F2A27',
-  },
-  rankShop: {
-    fontSize: 14,
-    color: '#6B5E57',
-    marginTop: 2,
-  },
-  rankArrow: {
-    fontSize: 26,
-    color: '#C5B8B2',
-    marginLeft: 6,
-  },
 
   overlay: {
     ...StyleSheet.absoluteFillObject,
@@ -1177,11 +824,53 @@ const styles = StyleSheet.create({
   radioLabel: {
     fontSize: 16,
   },
-
+  scrollContent: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  heading: {
+    fontWeight: 'bold',
+    fontSize: 18,
+    marginVertical: 12,
+    color: '#FF6600',
+  },
+   inputLabel: {
+    fontSize: 18,
+    marginTop: 10,
+    marginBottom: 10,
+    color: '#333',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 8,
+    width: '100%',
+    backgroundColor: '#fffaf0e3',
+  },
   radioCircle: {
     fontSize: 22,
     marginRight: 8,
     color: '#FF6600',
+  },
+
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  header: {
+    backgroundColor: '#FFA500',
+    height: 75,
+    width: '100%',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingBottom: 20,
+  },
+  headerTitle: {
+    fontSize: 25,
+    fontWeight: 'bold',
+    color: '#fff',
   },
   buttonRow: {
     flexDirection: 'row',
@@ -1223,20 +912,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
-  },
-  switchBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#ccc',
-  },
-  switchBtnActive: {
-    backgroundColor: '#FF6600',
-    borderColor: '#FF6600',
-  },
-  switchBtnText: {
-    color: '#fff',
   },
 
 });

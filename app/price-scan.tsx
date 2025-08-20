@@ -1,12 +1,17 @@
 // app/price-scan.tsx
 
-import * as ImageManipulator from 'expo-image-manipulator';
-import * as ImagePicker from 'expo-image-picker';
+import { BlurView } from 'expo-blur';
+import {
+  CameraView,
+  type BarcodeScanningResult,
+  type CameraCapturedPicture
+} from 'expo-camera';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { Alert, Button, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { Button, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Dropdown } from 'react-native-element-dropdown';
+
 
 type Shop = {
   name?: string;
@@ -21,6 +26,15 @@ export default function PriceScan() {
   const router = useRouter();
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [janResult, setJanResult] = useState<string | null>(null);
+
+  // Camera の型を直接定義（公式型定義から抽出）
+  type CameraHandle = {
+    takePictureAsync: (options?: any) => Promise<CameraCapturedPicture>;
+    pausePreview: () => void;
+    resumePreview: () => void;
+    // 必要なら他のメソッドも追加
+  };
+
 /*
   const [janResult, setJanResult] = useState<{
     jan?: string;
@@ -28,6 +42,7 @@ export default function PriceScan() {
     imageUrl?: string;
   } | null>(null);
 */
+  const [isProcessing, setIsProcessing] = useState(false);
   const [ocrResult, setOcrResult] = useState<string | null>(null);
   const [shopResult, setShopResult] = useState<string | null>(null);
 
@@ -45,14 +60,16 @@ export default function PriceScan() {
   const [labelImageUri, setLabelImageUri] = useState<string | null>(null);
   const [productImageUri, setProductImageUri] = useState<string | null>(null);
   const [priceMode, setPriceMode] = useState<'tax_excluded' | 'tax_included'>('tax_excluded');
-
-
+  const cameraRef = useRef<CameraView | null>(null);
+  const [showCamera, setShowCamera] = useState(true);
+  /*
   useEffect(() => {
     // 起動時にカメラを起動
     takePhoto();
   }, []);
+*/
 
-  type RankingItem = {
+type RankingItem = {
     商品名: string;
     価格: number;
     店舗名: string;
@@ -94,37 +111,6 @@ const calcTaxIncludedPrice = (price: string | number, mode: 'tax_excluded' | 'ta
   return num; // 税込み表示
 };
 
-
-
-const takePhoto = async () => {
-  console.log('カメラ撮影開始');
-  const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-  if (!permissionResult.granted) {
-    Alert.alert('カメラへのアクセスが許可されていません');
-    return;
-  }
-
-  const result = await ImagePicker.launchCameraAsync({
-    allowsEditing: false,
-    quality: 0.8,
-  });
-
-  if (!result.canceled && result.assets && result.assets.length > 0) {
-    const asset = result.assets[0];
-
-    // 即アップロード（保存・確認なし）
-    const manipResult = await ImageManipulator.manipulateAsync(
-      asset.uri,
-      [{ resize: { width: 500 } }], // 横幅500pxに縮小（縦横比維持）
-      { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG } // JPEGで圧縮
-    );
-
-    console.log('カメラ撮影成功');
-    // 一時的にURIはstateに入れる（アップロードに使用）
-//    setImageUri(manipResult.uri);
-    await sendToServer(manipResult.uri); // ← 撮影直後にアップロード実行
-  }
-};
 
 /*
 const takePhoto = async () => {
@@ -226,6 +212,7 @@ const takePhoto = async () => {
         setFinalImageUrl(imageUrl);
         setFinalPrice(price);
         setImageUri(null);  // ← 画像を非表示にする
+        setShowCamera(false); // カメラ画面を非表示にする
         setStep(1);
       } else {
         console.log('❌ 商品情報が取得できませんでした → OCRへ');
@@ -488,19 +475,69 @@ const takePhoto = async () => {
     }
   };
 
+
+  const onBarCodeScanned = async (scanningResult: BarcodeScanningResult) => {
+    if (isProcessing) return;
+    setIsProcessing(true);
+
+    console.log('バーコード検出', scanningResult.data);
+
+    if (cameraRef.current) {
+      const photo: CameraCapturedPicture =
+        await cameraRef.current.takePictureAsync({ quality: 0.8 });
+      await sendToServer(photo.uri);
+    }
+
+    onScanComplete();
+    setIsProcessing(false);
+  };
+
+  // スキャン完了時
+  const onScanComplete = () => {
+    console.log('スキャン完了');
+    setShowCamera(false); // カメラ画面を非表示にする
+    console.log('カメラ画面を非表示');
+    setStep(1);           // ステップ1へ遷移
+  };
+
+
+
   return (
     <View style={styles.container}>
+      {/* 固定ヘッダー */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>アプリ名</Text>
       </View>
 
+      {/* ====== バーコードスキャン画面 ====== */}
+      {showCamera && (
+        <CameraView
+          ref={cameraRef}
+          facing="back"
+          onBarcodeScanned={onBarCodeScanned} // バーコード認識コールバック
+          style={StyleSheet.absoluteFill} // 画面いっぱいに表示
+        />
+      )}
+
+      <View style={styles.overlay}>
+        <BlurView intensity={50} style={styles.topBottomOverlay} />
+        <View style={styles.middleRow}>
+          <BlurView intensity={50} style={styles.sideOverlay} />
+          <View style={styles.guideBox}>
+            {/* 中心線 */}
+            <View style={styles.centerLine} />
+          </View>
+          <BlurView intensity={50} style={styles.sideOverlay} />
+        </View>
+        <BlurView intensity={50} style={styles.topBottomOverlay} />
+      </View>
 
       {/* ここ ↓↓↓ をまるごと差し替える */}
       <ScrollView contentContainerStyle={styles.scrollContent}>
 
 
         {/* ====== Step 1 : バーコード結果 ====== */}
-        {step === 1 && janInfo && (
+        {!showCamera && step === 1 && janInfo && (
           <View style={styles.stepCard}>
             {/* 上部：商品画像＋右側に「商品名」「JANコード」風ピル */}
             <View style={styles.row}>
@@ -945,15 +982,73 @@ console.log('ランキング情報', rankingResp ?? "");
         )}
 
       </ScrollView>
+
     </View>
   );
-
 
 }
 
 
 const styles = StyleSheet.create({
-  /* 既存の上書き -------------------- */
+
+  container: { flex: 1, backgroundColor: '#ccc' },
+  header: { height: 60, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFA500' },
+  headerTitle: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
+
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  overlayHorizontal: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+
+  guideBox: {
+    width: '100%',
+    aspectRatio: 1,
+    borderWidth: 2,
+    borderColor: 'blue',
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  centerLine: {
+    position: 'absolute',
+    top: '50%',
+    width: '100%',
+    height: 2,
+    backgroundColor: 'yellow',
+  },
+
+  scrollContent: { padding: 16 },
+
+
+  camera: { flex: 1 }, // 画面全体にカメラ映像を表示
+
+  topBottomOverlay: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+
+  middleRow: { flexDirection: 'row' },
+
+  sideOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
+
+  heading: {
+    fontWeight: 'bold',
+    fontSize: 18,
+    marginVertical: 12,
+    color: '#D86B5F',
+  },
+
+  /*
   container: {
     flex: 1,
     backgroundColor: '#F7F2EE', // 淡いベージュ系
@@ -976,12 +1071,34 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: 'stretch', // 中央寄せ → 画面幅いっぱい
   },
-  heading: {
-    fontWeight: 'bold',
-    fontSize: 18,
-    marginVertical: 12,
-    color: '#D86B5F',
+
+    overlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
+  topBottomOverlay: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  middleRow: { flexDirection: 'row', width: '100%', height: 150 },
+  sideOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  guideBox: {
+    width: '70%',
+    aspectRatio: 2, // 透明矩形縦横比
+    borderWidth: 2,
+    borderColor: 'white',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  centerLine: {
+    position: 'absolute',
+    width: 2,
+    height: '100%',
+    backgroundColor: 'white',
+  },
+  */
   inputLabel: {
     fontSize: 16,
     marginTop: 10,
@@ -1142,12 +1259,6 @@ const styles = StyleSheet.create({
     fontSize: 26,
     color: '#C5B8B2',
     marginLeft: 6,
-  },
-
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   guide: {
     width: 250,
